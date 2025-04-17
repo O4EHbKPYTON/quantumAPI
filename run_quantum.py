@@ -15,6 +15,7 @@ def run_cirq():
     data = request.get_json()
     qubit_name = data.get('qubit_name', 'X')
     power = data.get('power', 1.0)
+    cell_index = data.get('cell_index', -1)  # Получаем индекс от клиента
 
     qubit = cirq.NamedQubit(qubit_name)
     circuit = cirq.Circuit()
@@ -25,7 +26,8 @@ def run_cirq():
     result = simulator.run(circuit)
 
     return jsonify({
-        "result": bitstr(result.measurements.values())
+        "result": bitstr(result.measurements.values()),
+        "cell_index": cell_index  # Возвращаем тот же индекс, что получили
     })
 
 
