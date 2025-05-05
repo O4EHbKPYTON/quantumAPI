@@ -4,52 +4,67 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from io import BytesIO
-import matplotlib
-from sympy import symbols, Eq, latex
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
+import os
 
 app = Flask(__name__)
-matplotlib.use('Agg')
+plt.switch_backend('Agg')
+
+
+def get_russian_font(size=40):
+    try:
+        font_path = "arial.ttf" if os.name == 'nt' else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        return ImageFont.truetype(font_path, size)
+    except:
+        try:
+            return ImageFont.truetype("DejaVuSans.ttf", size)
+        except:
+            return ImageFont.load_default(size)
 
 
 def generate_formula_image(formula_type: str) -> BytesIO:
-    width, height = 1000, 300
+    width, height = 1400, 500
     image = Image.new('RGB', (width, height), (255, 255, 255))
     draw = ImageDraw.Draw(image)
 
     try:
-        try:
-            font_large = ImageFont.truetype("arial.ttf", 50)
-            font_small = ImageFont.truetype("arial.ttf", 50)
-        except:
-            font_large = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+        formulas = {
+            "basis_states": ("X = [1 0]    O = [0 1]", "Базисные состояния"),
+            "x_gate": ("X-Gate Матрица Паули: [[0 1][1 0]]", "Инвертирует X и O"),
+            "strategy": ("θ = π * power", "Управление углом поворота"),
+            "superposition": ("Состояние = αX + βO", "Суперпозиция состояний"),
+            "probability": ("P(X) = sin²(θ/2)  P(O) = cos²(θ/2)", "Вероятности измерений"),
+            "measurement": ("Состояние → X или O", "Коллапс волновой функции"),
+            "intro": ("X = [1 0]    O = [0 1]", "Начальные состояния")
+        }
 
-        if formula_type == "superposition":
-            formula_text = "ψ = αX + βO"
-            explanation = "Состояние квантовой клетки в суперпозиции"
-        elif formula_type == "probability":
-            formula_text = "P(X) = sin²(θ/2)    P(O) = cos²(θ/2)"
-            explanation = "Вероятности измерения состояний"
-        elif formula_type == "measurement":
-            formula_text = "ψ → X или O"
-            explanation = "Коллапс волновой функции при измерении"
-        elif formula_type == "x_gate":
-            formula_text = "X = [[0, 1], [1, 0]]"
-            explanation = "Матрица квантового ворота X"
-        else:  # default/intro
-            formula_text = "X = [1, 0]    O = [0, 1]"
-            explanation = "Базисные состояния клетки"
+        formula_text, explanation = formulas.get(formula_type, ("", ""))
 
-        text_width = draw.textlength(formula_text, font=font_large)
-        draw.text(((width - text_width) / 2, 100), formula_text, font=font_large, fill="black")
+        font_large = get_russian_font(65)
+        font_small = get_russian_font(65)
 
-        text_width = draw.textlength(explanation, font=font_small)
-        draw.text(((width - text_width) / 2, 150), explanation, font=font_small, fill="black")
+        # Рисуем основную формулу
+        bbox = draw.textbbox((0, 0), formula_text, font=font_large)
+        text_width = bbox[2] - bbox[0]
+        draw.text(
+            ((width - text_width) / 2, 100),
+            formula_text,
+            font=font_large,
+            fill="black"
+        )
+
+        bbox = draw.textbbox((0, 0), explanation, font=font_small)
+        text_width = bbox[2] - bbox[0]
+        draw.text(
+            ((width - text_width) / 2, 250),
+            explanation,
+            font=font_small,
+            fill="#444444"
+        )
 
     except Exception as e:
-        print(f"Ошибка при генерации формулы: {e}")
+        print(f"Error: {e}")
         draw.text((10, 10), f"Ошибка: {str(e)}", fill="red")
 
     buf = BytesIO()
@@ -57,10 +72,10 @@ def generate_formula_image(formula_type: str) -> BytesIO:
     buf.seek(0)
     return buf
 
-
 @app.route('/formula/<formula_type>')
 def get_formula(formula_type: str):
-    valid_types = ["superposition", "probability", "measurement", "x_gate", "intro"]
+    valid_types = ["basis_states", "x_gate", "strategy", "superposition",
+                  "probability", "measurement", "intro"]
     if formula_type not in valid_types:
         return "Invalid formula type", 404
 
