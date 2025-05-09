@@ -84,9 +84,11 @@ def get_formula(formula_type: str):
 
 
 def plot_bloch_sphere(state, title):
-    fig = plt.figure(figsize=(8, 8), dpi=100)
-    ax = fig.add_subplot(111, projection='3d')
+    fig = plt.figure(figsize=(8, 8), dpi=100, facecolor=(0.5, 0.5, 0.5))
+    ax = fig.add_subplot(111, projection='3d') #
     ax.view_init(elev=20, azim=45)
+
+    ax.set_facecolor((0.5, 0.5, 0.5))
 
     u = np.linspace(0, 2 * np.pi, 100)
     v = np.linspace(0, np.pi, 100)
@@ -94,7 +96,7 @@ def plot_bloch_sphere(state, title):
     y = np.outer(np.sin(u), np.sin(v))
     z = np.outer(np.ones(np.size(u)), np.cos(v))
 
-    ax.plot_surface(x, y, z, color='b', alpha=0.1)
+    ax.plot_surface(x, y, z, color='w', alpha=0.1)
 
     ax.quiver(0, 0, 0, 1.5, 0, 0, color='k', arrow_length_ratio=0.1)
     ax.quiver(0, 0, 0, 0, 1.5, 0, color='k', arrow_length_ratio=0.1)
