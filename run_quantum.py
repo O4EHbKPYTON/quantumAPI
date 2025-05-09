@@ -96,7 +96,7 @@ def plot_bloch_sphere(state, title):
     y = np.outer(np.sin(u), np.sin(v))
     z = np.outer(np.ones(np.size(u)), np.cos(v))
 
-    ax.plot_surface(x, y, z, color='w', alpha=0.1)
+    ax.plot_surface(x, y, z, color='w', alpha=0.9)
 
     ax.quiver(0, 0, 0, 1.5, 0, 0, color='k', arrow_length_ratio=0.1)
     ax.quiver(0, 0, 0, 0, 1.5, 0, color='k', arrow_length_ratio=0.1)
