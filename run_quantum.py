@@ -24,14 +24,15 @@ def get_russian_font(size=40):
 
 
 def generate_formula_image(formula_type: str) -> BytesIO:
-    width, height = 1400, 500
-    image = Image.new('RGB', (width, height), (255, 255, 255))
+    # Размер окна под texture rect (640x317)
+    width, height = 640, 317
+    image = Image.new('RGB', (width, height), (127, 127, 127))
     draw = ImageDraw.Draw(image)
 
     try:
         formulas = {
             "basis_states": ("X = [1 0]    O = [0 1]", "Базисные состояния"),
-            "x_gate": ("X-Gate Матрица Паули: [[0 1][1 0]]", "Инвертирует X и O"),
+            "x_gate": (["[0 1]", "[1 0]"], "X-Gate — матрица Паули"),
             "strategy": ("θ = π * power", "Управление углом поворота"),
             "superposition": ("Состояние = αX + βO", "Суперпозиция состояний"),
             "probability": ("P(X) = sin²(θ/2)  P(O) = cos²(θ/2)", "Вероятности измерений"),
@@ -41,27 +42,42 @@ def generate_formula_image(formula_type: str) -> BytesIO:
 
         formula_text, explanation = formulas.get(formula_type, ("", ""))
 
-        font_large = get_russian_font(65)
-        font_small = get_russian_font(65)
+        font_large = get_russian_font(40)
+        font_small = get_russian_font(36)
 
-        # Рисуем основную формулу
-        bbox = draw.textbbox((0, 0), formula_text, font=font_large)
-        text_width = bbox[2] - bbox[0]
-        draw.text(
-            ((width - text_width) / 2, 100),
-            formula_text,
-            font=font_large,
-            fill="black"
-        )
+        if isinstance(formula_text, list):
+            # Рисуем каждую строку матрицы отдельно, выровнено по центру
+            for i, line in enumerate(formula_text):
+                bbox = draw.textbbox((0, 0), line, font=font_large)
+                text_width = bbox[2] - bbox[0]
+                draw.text(
+                    ((width - text_width) / 2, 60 + i * 40),
+                    line,
+                    font=font_large,
+                    fill="black"
+                )
+            text_y = 60 + len(formula_text) * 40 + 10
+        else:
+            bbox = draw.textbbox((0, 0), formula_text, font=font_large)
+            text_width = bbox[2] - bbox[0]
+            draw.text(
+                ((width - text_width) / 2, 80),
+                formula_text,
+                font=font_large,
+                fill="black"
+            )
+            text_y = 130
 
+        # Пояснение
         bbox = draw.textbbox((0, 0), explanation, font=font_small)
         text_width = bbox[2] - bbox[0]
         draw.text(
-            ((width - text_width) / 2, 250),
+            ((width - text_width) / 2, text_y),
             explanation,
             font=font_small,
-            fill="#444444"
+            fill="black"
         )
+
 
     except Exception as e:
         print(f"Error: {e}")
@@ -71,6 +87,7 @@ def generate_formula_image(formula_type: str) -> BytesIO:
     image.save(buf, format='PNG')
     buf.seek(0)
     return buf
+
 
 @app.route('/formula/<formula_type>')
 def get_formula(formula_type: str):
