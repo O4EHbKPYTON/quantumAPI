@@ -6,10 +6,14 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
+from pathlib import Path
 import os
+import matplotlib as mpl
 
 app = Flask(__name__)
 plt.switch_backend('Agg')
+mpl.rcParams['text.usetex'] = True
+mpl.rcParams['text.latex.preamble'] = r'\usepackage{amsmath} \usepackage{amsfonts} \usepackage{amssymb}'
 
 
 def get_russian_font(size=40):
@@ -23,65 +27,101 @@ def get_russian_font(size=40):
             return ImageFont.load_default(size)
 
 
+def debug_save_image(image, filename="debug.png"):
+    debug_dir = Path("debug")
+    debug_dir.mkdir(exist_ok=True)
+    image.save(debug_dir / filename)
+
+
+def debug_save_all_formulas():
+    test_dir = Path("test_formulas")
+    test_dir.mkdir(exist_ok=True)
+
+    formula_types = [
+        "basis_states", "x_gate", "strategy",
+        "superposition", "probability", "measurement", "intro"
+    ]
+
+    for formula_type in formula_types:
+        img_data = generate_formula_image(formula_type)
+        with open(test_dir / f"{formula_type}.png", "wb") as f:
+            f.write(img_data.getbuffer())
+
+    print(f"Тестовые изображения сохранены в {test_dir.absolute()}")
+
+
+def render_latex_to_image(latex_str, dpi=300, fontsize=20):
+    fig = plt.figure(figsize=(6, 2))
+    fig.patch.set_facecolor((0.5, 0.5, 0.5))
+    plt.axis('off')
+    plt.text(0.5, 0.5, f"${latex_str}$", fontsize=fontsize,
+             ha='center', va='center', color='black')
+
+    canvas = FigureCanvas(fig)
+    buf = BytesIO()
+    canvas.print_png(buf)
+    plt.close(fig)
+    buf.seek(0)
+    img = Image.open(buf)
+    return img
+
+
 def generate_formula_image(formula_type: str) -> BytesIO:
-    # Размер окна под texture rect (640x317)
     width, height = 640, 317
     image = Image.new('RGB', (width, height), (127, 127, 127))
     draw = ImageDraw.Draw(image)
 
-    try:
-        formulas = {
-            "basis_states": ("X = [1 0]    O = [0 1]", "Базисные состояния"),
-            "x_gate": (["[0 1]", "[1 0]"], "X-Gate — матрица Паули"),
-            "strategy": ("θ = π * power", "Управление углом поворота"),
-            "superposition": ("Состояние = αX + βO", "Суперпозиция состояний"),
-            "probability": ("P(X) = sin²(θ/2)  P(O) = cos²(θ/2)", "Вероятности измерений"),
-            "measurement": ("Состояние → X или O", "Коллапс волновой функции"),
-            "intro": ("X = [1 0]    O = [0 1]", "Начальные состояния")
+    latex_formulas = {
+        "basis_states": {
+            "latex": r"|X\rangle = \begin{bmatrix} 1 \\ 0 \end{bmatrix}, \quad |O\rangle = \begin{bmatrix} 0 \\ 1 \end{bmatrix}",
+            "description": ""
+        },
+        "x_gate": {
+            "latex": r"X = \begin{bmatrix} 0 & 1 \\ 1 & 0 \end{bmatrix}",
+            "description": ""
+        },
+        "strategy": {
+            "latex": r"\theta = \pi \cdot \text{power}",
+            "description": ""
+        },
+        "superposition": {
+            "latex": r"|\psi\rangle = \alpha|X\rangle + \beta|O\rangle",
+            "description": ""
+        },
+        "probability": {
+            "latex": r"P(X) = \sin^2\left(\frac{\theta}{2}\right), \quad P(O) = \cos^2\left(\frac{\theta}{2}\right)",
+            "description": ""
+        },
+        "measurement": {
+            "latex": r"|\psi\rangle \rightarrow |X\rangle \text{ or } |O\rangle",
+            "description": ""
+        },
+        "intro": {
+            "latex": r"\mathbb{I} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}",
+            "description": ""
         }
+    }
 
-        formula_text, explanation = formulas.get(formula_type, ("", ""))
+    formula_data = latex_formulas.get(formula_type, {})
+    if not formula_data:
+        draw.text((10, 10), "Неизвестный тип формулы", fill="red")
+    else:
+        try:
+            latex_img = render_latex_to_image(formula_data["latex"], fontsize=24)
+            image.paste(latex_img, (width // 2 - latex_img.width // 2, height // 2 - latex_img.height // 2 - 20))
 
-        font_large = get_russian_font(40)
-        font_small = get_russian_font(36)
-
-        if isinstance(formula_text, list):
-            # Рисуем каждую строку матрицы отдельно, выровнено по центру
-            for i, line in enumerate(formula_text):
-                bbox = draw.textbbox((0, 0), line, font=font_large)
-                text_width = bbox[2] - bbox[0]
-                draw.text(
-                    ((width - text_width) / 2, 60 + i * 40),
-                    line,
-                    font=font_large,
-                    fill="black"
-                )
-            text_y = 60 + len(formula_text) * 40 + 10
-        else:
-            bbox = draw.textbbox((0, 0), formula_text, font=font_large)
+            font = get_russian_font(24)
+            desc = formula_data["description"]
+            bbox = draw.textbbox((0, 0), desc, font=font)
             text_width = bbox[2] - bbox[0]
             draw.text(
-                ((width - text_width) / 2, 80),
-                formula_text,
-                font=font_large,
+                ((width - text_width) // 2, height - 50),
+                desc,
+                font=font,
                 fill="black"
             )
-            text_y = 130
-
-        # Пояснение
-        bbox = draw.textbbox((0, 0), explanation, font=font_small)
-        text_width = bbox[2] - bbox[0]
-        draw.text(
-            ((width - text_width) / 2, text_y),
-            explanation,
-            font=font_small,
-            fill="black"
-        )
-
-
-    except Exception as e:
-        print(f"Error: {e}")
-        draw.text((10, 10), f"Ошибка: {str(e)}", fill="red")
+        except Exception as e:
+            draw.text((10, 10), f"Ошибка: {str(e)}", fill="red")
 
     buf = BytesIO()
     image.save(buf, format='PNG')
@@ -92,7 +132,7 @@ def generate_formula_image(formula_type: str) -> BytesIO:
 @app.route('/formula/<formula_type>')
 def get_formula(formula_type: str):
     valid_types = ["basis_states", "x_gate", "strategy", "superposition",
-                  "probability", "measurement", "intro"]
+                   "probability", "measurement", "intro"]
     if formula_type not in valid_types:
         return "Invalid formula type", 404
 
@@ -100,46 +140,71 @@ def get_formula(formula_type: str):
     return send_file(buf, mimetype='image/png')
 
 
-def plot_bloch_sphere(state, title):
-    fig = plt.figure(figsize=(8, 8), dpi=100, facecolor=(0.5, 0.5, 0.5))
-    ax = fig.add_subplot(111, projection='3d') #
-    ax.view_init(elev=20, azim=45)
-
+def create_figure():
+    fig = plt.figure(figsize=(10, 10), dpi=100, facecolor=(0.5, 0.5, 0.5))
+    ax = fig.add_subplot(111, projection='3d')
     ax.set_facecolor((0.5, 0.5, 0.5))
+    ax.view_init(elev=20, azim=45)
+    lim = 1.5
+    ax.set_xlim(-lim, lim)
+    ax.set_ylim(-lim, lim)
+    ax.set_zlim(-lim, lim)
+    ax.dist = 5
+    return fig, ax
 
+def draw_axes(ax, arrow_scale=2.5, text_scale=2.5, font_size=40):
+    ax.quiver(0, 0, 0, arrow_scale, 0, 0, color='k', arrow_length_ratio=0.1, linewidth=1.5)
+    ax.quiver(0, 0, 0, 0, arrow_scale, 0, color='k', arrow_length_ratio=0.1, linewidth=1.5)
+    ax.quiver(0, 0, 0, 0, 0, arrow_scale, color='k', arrow_length_ratio=0.1, linewidth=1.5)
+    ax.text(text_scale, 0, 0, "X", fontsize=font_size)
+    ax.text(0, text_scale, 0, "Y", fontsize=font_size)
+    ax.text(0, 0, text_scale, "Z", fontsize=font_size)
+
+def draw_sphere(ax):
     u = np.linspace(0, 2 * np.pi, 100)
     v = np.linspace(0, np.pi, 100)
-    x = np.outer(np.cos(u), np.sin(v))
-    y = np.outer(np.sin(u), np.sin(v))
-    z = np.outer(np.ones(np.size(u)), np.cos(v))
+    lim = 2.0
+    x = lim * np.outer(np.cos(u), np.sin(v))
+    y = lim * np.outer(np.sin(u), np.sin(v))
+    z = lim * np.outer(np.ones(np.size(u)), np.cos(v))
+    ax.plot_surface(x, y, z, color='w', alpha=0.2)
 
-    ax.plot_surface(x, y, z, color='w', alpha=0.9)
-
-    ax.quiver(0, 0, 0, 1.5, 0, 0, color='k', arrow_length_ratio=0.1)
-    ax.quiver(0, 0, 0, 0, 1.5, 0, color='k', arrow_length_ratio=0.1)
-    ax.quiver(0, 0, 0, 0, 0, 1.5, color='k', arrow_length_ratio=0.1)
-
-    ax.text(1.6, 0, 0, "X", fontsize=14)
-    ax.text(0, 1.6, 0, "Y", fontsize=14)
-    ax.text(0, 0, 1.6, "Z", fontsize=14)
-
+def draw_state(ax, state, font_size=40):
+    ratio = 0.15
+    linewidth = 6
+    zorder = 5
     if state == 'superposition':
-        ax.quiver(0, 0, 0, 1, 0, 0, color='r', arrow_length_ratio=0.1)
-        ax.quiver(0, 0, 0, 0, 0, 1, color='r', arrow_length_ratio=0.1)
-        ax.text(0.5, 0, 0.5, "|ψ⟩", fontsize=16, color='r')
+        ax.quiver(0, 0, 0, 1.4, 0, 0, color='r', arrow_length_ratio=ratio, linewidth=linewidth, zorder=zorder)
+        ax.quiver(0, 0, 0, 0, 0, 1.4, color='r', arrow_length_ratio=ratio, linewidth=linewidth, zorder=zorder)
+        ax.text(0.6, 0, 0.6, r"$|\psi\rangle$", fontsize=font_size + 10, color='r', zorder=10)
     elif state == 'x':
-        ax.quiver(0, 0, 0, 1, 0, 0, color='r', arrow_length_ratio=0.1)
-        ax.text(0.5, 0, 0, "|X⟩", fontsize=16, color='r')
+        ax.quiver(0, 0, 0, 1.2, 0, 0, color='r', arrow_length_ratio=ratio, linewidth=linewidth, zorder=zorder)
+        ax.text(0.6, 0, 0, r"$|X\rangle$", fontsize=font_size + 4, color='r', zorder=10)
     elif state == 'o':
-        ax.quiver(0, 0, 0, 0, 0, 1, color='r', arrow_length_ratio=0.1)
-        ax.text(0, 0, 0.5, "|O⟩", fontsize=16, color='r')
+        ax.quiver(0, 0, 0, 0, 0, 1.2, color='r', arrow_length_ratio=ratio, linewidth=linewidth, zorder=zorder)
+        ax.text(0, 0, 0.6, r"$|O\rangle$", fontsize=font_size + 4, color='r', zorder=10)
     elif state == 'measurement':
-        ax.quiver(0, 0, 0, 0.7, 0, 0.7, color='r', arrow_length_ratio=0.1)
-        ax.text(0.4, 0, 0.4, "Измерение", fontsize=12, color='r')
+        ax.quiver(0, 0, 0, 0.85, 0, 0.85, color='r', arrow_length_ratio=ratio, linewidth=linewidth, zorder=zorder)
+        ax.text(0.5, 0, 0.5, "Measurement", fontsize=font_size + 2, color='r', zorder=10)
 
-    ax.set_title(title, fontsize=14)
+def plot_bloch_sphere(state, title):
+    output_dir = "bloch_sphere_images"
+    os.makedirs(output_dir, exist_ok=True)
+
+    fig, ax = create_figure()
+    draw_sphere(ax)
+    draw_axes(ax)
+    draw_state(ax, state)
+    ax.set_title(title, fontsize=30)
     ax.set_axis_off()
-    plt.tight_layout(pad=0)
+    plt.tight_layout(pad=0.5)
+
+    filename = f"{state}_{title.replace(' ', '_')}.png"
+    filepath = os.path.join(output_dir, filename)
+    fig.savefig(filepath, dpi=100, bbox_inches='tight', facecolor=fig.get_facecolor())
+
+    plt.close(fig)
+    print(f"Saved: {filepath}")
 
     canvas = FigureCanvas(fig)
     buf = BytesIO()
@@ -152,10 +217,10 @@ def plot_bloch_sphere(state, title):
 @app.route('/bloch_sphere/<state>')
 def get_bloch_sphere(state):
     titles = {
-        'superposition': 'Суперпозиция состояний',
-        'x': 'Состояние X',
-        'o': 'Состояние O',
-        'measurement': 'Процесс измерения'
+        'superposition': 'Superposition',
+        'x': 'State X',
+        'o': 'State O',
+        'measurement': 'measurement'
     }
 
     if state not in titles:
@@ -187,4 +252,5 @@ def run_cirq():
 
 
 if __name__ == '__main__':
+    debug_save_all_formulas()
     app.run(port=8000)
